@@ -1,19 +1,25 @@
+import sys
 from typing import Optional
-from fastapi import FastAPI, Depends, HTTPException, status
+from datetime import datetime, timedelta
+from fastapi import Depends, HTTPException, status, APIRouter
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
-from database import SessionLocal, engine
-from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
-from datetime import datetime, timedelta
-from jose import JWTError, jwt
+from jose import jwt
 import models
 from schemas import NewUser
+from database import SessionLocal, engine
+
+sys.path.append("..")
 
 SECREY_KEY = "Penek"
 ALGORITHM = "HS256"
 bcrypt_context= CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-app = FastAPI()
+router = APIRouter(prefix="/auth",
+                    tags=["auth"],
+                    responses={401:{"user":"Not authorized"}}
+                    )
 models.Base.metadata.create_all(bind = engine)
 oauth2_bearer = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -62,7 +68,7 @@ async def get_current_user(token: str = Depends(oauth2_bearer)):
          raise get_user_exception()
 
 
-@app.post('/create/user')
+@router.post('/create/user')
 async def create_user(new_user: NewUser, db: Session = Depends(get_db)):
     new_user_model = models.Users()
     new_user_model.email = new_user.email
@@ -70,6 +76,7 @@ async def create_user(new_user: NewUser, db: Session = Depends(get_db)):
     new_user_model.last_name = new_user.last_name
     new_user_model.hashed_password = get_password_hash(new_user.password)
     new_user_model.username = new_user.username
+    new_user_model.phone_number = new_user.phone_number
     new_user_model.is_active = True
 
     db.add(new_user_model)
@@ -78,7 +85,7 @@ async def create_user(new_user: NewUser, db: Session = Depends(get_db)):
     return {'status':'201',
             'transaction':'Succesful'}
 
-@app.post('/token')
+@router.post('/token')
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(),
                                 db: Session = Depends(get_db)):
     user = authenticate_user(form_data.username, form_data.password, db)
